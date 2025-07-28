@@ -6,30 +6,42 @@ export class CollaborationCrypto {
 
     // Generate a new encryption key for the room
     async generateKey() {
-        this.key = await window.crypto.subtle.generateKey(
-            {
-                name: "AES-GCM",
-                length: 256,
-            },
-            true, // extractable
-            ["encrypt", "decrypt"]
-        );
-        return this.key;
+        try {
+            this.key = await window.crypto.subtle.generateKey(
+                {
+                    name: "AES-GCM",
+                    length: 256,
+                },
+                true, // extractable
+                ["encrypt", "decrypt"]
+            );
+            console.log("Successfully generated new encryption key");
+            return this.key;
+        } catch (error) {
+            console.error("Failed to generate key:", error);
+            throw error;
+        }
     }
 
     // Import a key from raw bytes (for sharing between users)
     async importKey(keyData) {
-        this.key = await window.crypto.subtle.importKey(
-            "raw",
-            keyData,
-            {
-                name: "AES-GCM",
-                length: 256,
-            },
-            true,
-            ["encrypt", "decrypt"]
-        );
-        return this.key;
+        try {
+            this.key = await window.crypto.subtle.importKey(
+                "raw",
+                keyData,
+                {
+                    name: "AES-GCM",
+                    length: 256,
+                },
+                true,
+                ["encrypt", "decrypt"]
+            );
+            console.log("Successfully imported encryption key");
+            return this.key;
+        } catch (error) {
+            console.error("Failed to import key:", error);
+            throw error;
+        }
     }
 
     // Export key as raw bytes (to share with other users)
@@ -37,20 +49,40 @@ export class CollaborationCrypto {
         if (!this.key) {
             throw new Error("No key available to export");
         }
-        return await window.crypto.subtle.exportKey("raw", this.key);
+        try {
+            const exported = await window.crypto.subtle.exportKey("raw", this.key);
+            console.log("Successfully exported key");
+            return exported;
+        } catch (error) {
+            console.error("Failed to export key:", error);
+            throw error;
+        }
     }
 
     // Export key as Base64 string (for URLs)
     async exportKeyAsBase64() {
-        const keyBuffer = await this.exportKey();
-        return this.arrayBufferToBase64(keyBuffer);
+        try {
+            const keyBuffer = await this.exportKey();
+            const base64 = this.arrayBufferToBase64(keyBuffer);
+            console.log("Successfully exported key as base64");
+            return base64;
+        } catch (error) {
+            console.error("Failed to export key as base64:", error);
+            throw error;
+        }
     }
 
     // Import key from Base64 string (from URLs)
     async importKeyFromBase64(base64Key) {
-        const keyBuffer = this.base64ToArrayBuffer(base64Key);
-        await this.importKey(keyBuffer);
-        return this.key;
+        try {
+            const keyBuffer = this.base64ToArrayBuffer(base64Key);
+            await this.importKey(keyBuffer);
+            console.log("Successfully imported key from base64");
+            return this.key;
+        } catch (error) {
+            console.error("Failed to import key from base64:", error);
+            throw error;
+        }
     }
 
     // Generate random IV (Initialization Vector)
@@ -61,39 +93,62 @@ export class CollaborationCrypto {
     // Encrypt the drawing data
     async encryptData(data) {
         if (!this.key) {
+            console.log("No key available, generating new one...");
             await this.generateKey();
         }
 
-        // Convert data to JSON string, then to ArrayBuffer
-        const jsonString = JSON.stringify(data);
-        const encoder = new TextEncoder();
-        const dataBuffer = encoder.encode(jsonString);
+        try {
+            // Convert data to JSON string, then to ArrayBuffer
+            const jsonString = JSON.stringify(data);
+            const encoder = new TextEncoder();
+            const dataBuffer = encoder.encode(jsonString);
 
-        // Generate new IV for each encryption
-        const iv = this.generateIV();
+            // Generate new IV for each encryption
+            const iv = this.generateIV();
 
-        // Encrypt the data
-        const encryptedBuffer = await window.crypto.subtle.encrypt(
-            {
-                name: "AES-GCM",
+            console.log("Encrypting data:", {
+                dataSize: dataBuffer.byteLength,
+                ivSize: iv.byteLength,
+                hasKey: !!this.key
+            });
+
+            // Encrypt the data
+            const encryptedBuffer = await window.crypto.subtle.encrypt(
+                {
+                    name: "AES-GCM",
+                    iv: iv,
+                },
+                this.key,
+                dataBuffer
+            );
+
+            console.log("Successfully encrypted data");
+
+            return {
+                encryptedData: encryptedBuffer,
                 iv: iv,
-            },
-            this.key,
-            dataBuffer
-        );
-
-        return {
-            encryptedData: encryptedBuffer,
-            iv: iv,
-        };
+            };
+        } catch (error) {
+            console.error("Encryption failed:", error);
+            throw error;
+        }
     }
 
     // Decrypt the drawing data
     async decryptData(encryptedData, iv) {
-        console.log(iv, "Decrypting data with IV:", this.key);
+        console.log("Decrypting data with:", {
+            encryptedDataSize: encryptedData?.byteLength,
+            ivSize: iv?.byteLength,
+            hasKey: !!this.key,
+            keyType: this.key?.type
+        });
 
         if (!this.key) {
             throw new Error("No key available for decryption");
+        }
+
+        if (!encryptedData || !iv) {
+            throw new Error("Missing encrypted data or IV");
         }
 
         try {
@@ -111,10 +166,19 @@ export class CollaborationCrypto {
             const decoder = new TextDecoder();
             const jsonString = decoder.decode(decryptedBuffer);
 
+            console.log("Successfully decrypted data");
             return JSON.parse(jsonString);
+
         } catch (error) {
             console.error("Decryption failed:", error);
-            throw new Error("Failed to decrypt data");
+            console.error("Decryption error details:", {
+                errorName: error.name,
+                errorMessage: error.message,
+                encryptedDataType: typeof encryptedData,
+                ivType: typeof iv,
+                keyAvailable: !!this.key
+            });
+            throw new Error(`Failed to decrypt data: ${error.message}`);
         }
     }
 
@@ -128,20 +192,30 @@ export class CollaborationCrypto {
 
     // Utility functions for Base64 conversion
     arrayBufferToBase64(buffer) {
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
+        try {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        } catch (error) {
+            console.error("Failed to convert ArrayBuffer to base64:", error);
+            throw error;
         }
-        return btoa(binary);
     }
 
     base64ToArrayBuffer(base64) {
-        const binaryString = atob(base64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
+        try {
+            const binaryString = atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        } catch (error) {
+            console.error("Failed to convert base64 to ArrayBuffer:", error);
+            throw error;
         }
-        return bytes.buffer;
     }
 }
