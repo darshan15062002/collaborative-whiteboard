@@ -11,8 +11,12 @@
   },
   "dependencies": {
     "@excalidraw/excalidraw": "*",
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/socket.io-client": "^1.4.36",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.7.0",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",
