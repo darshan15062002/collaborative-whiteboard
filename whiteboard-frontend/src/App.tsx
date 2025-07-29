@@ -119,8 +119,10 @@ function App() {
         excalidrawAPIRef.current.updateScene({
           elements: sceneData.elements,
           appState: sceneData.appState,
-          files: sceneData.files,
+          // files: sceneData.files,
         });
+        excalidrawAPIRef.current.addFiles(sceneData.files || []);
+
 
         // Reset the flag after a short delay
         setTimeout(() => {
@@ -150,7 +152,7 @@ function App() {
       socket.disconnect();
     }
 
-    const _socket = io("http://localhost:3002", {
+    const _socket = io("https://collaborative-whiteboard-9zmw.onrender.com", {
       transports: ['websocket', 'polling']
     });
 
